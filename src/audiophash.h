@@ -74,8 +74,6 @@ float* ph_readaudio(const char *filename, int sr, int channels, float *sigbuf, i
 */
 uint32_t* ph_audiohash(float *buf, int nbbuf, const int sr, int &nbframes);
 
-DP **ph_audio_hashes(char *files[], int count, int sr = 8000, int channels = 1, int threads = 0);
-
 /* /brief bit count set bits in 32bit variable
  * /param n 
  * /return int number of bits set to 1, negative if error

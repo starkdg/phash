@@ -43,20 +43,21 @@
 
 #include <stdint.h>
 
-#cmakedefine HAVE_IMAGE_HASH
-#cmakedefine HAVE_AUDIO_HASH
-#cmakedefine HAVE_VIDEO_HASH
+#cmakedefine USE_IMAGE_HASH
+#cmakedefine USE_AUDIO_HASH
+#cmakedefine USE_VIDEO_HASH
+#cmakedefine USE_PTHREAD
 
 #define PACKAGE_STRING "${CMAKE_PROJECT_NAME}"
 
-#if defined(HAVE_IMAGE_HASH) || defined(HAVE_VIDEO_HASH)
+#if defined(USE_IMAGE_HASH) || defined(USE_VIDEO_HASH)
 #define cimg_debug 0
 #define cimg_display 0
 #include "CImg.h"
 using namespace cimg_library;
 #endif
 
-#ifdef HAVE_PTHREAD
+#ifdef USE_PTHREAD
 #include <pthread.h>
 #endif
 
@@ -263,7 +264,7 @@ int ph_dct_imagehash(const char* file,ulong64 &hash);
 
 int ph_bmb_imagehash(const char *file, uint8_t method, BinHash **ret_hash);
 
-#ifdef HAVE_VIDEO_HASH
+#ifdef USE_VIDEO_HASH
 static CImgList<uint8_t>* ph_getKeyFramesFromVideo(const char *filename);
 
 ulong64* ph_dct_videohash(const char *filename, int &Length);
