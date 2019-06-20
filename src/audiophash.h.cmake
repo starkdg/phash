@@ -25,6 +25,8 @@
 #ifndef _AUDIO_PHASH_H
 #define _AUDIO_PHASH_H
 
+#cmakedefine USE_AUDIO_HASH
+
 #include <limits.h>
 #include <math.h>
 #include <unistd.h>
@@ -36,6 +38,8 @@ extern "C" {
 #include "ph_fft.h"
 }
 
+#ifdef USE_AUDIO_HASH
+
 /*  /brief count number of samples in file
  *  
  *  /param filename - path and file name of audio file
@@ -44,8 +48,6 @@ extern "C" {
  *  /return int count of number of sampels, negative for error
 */
 int ph_count_samples(const char *filename, int sr,int channels);
-
-
 
 
 /* /brief read audio 
@@ -103,4 +105,5 @@ double ph_compare_blocks(const uint32_t *ptr_blockA,const uint32_t *ptr_blockB, 
  */
 double* ph_audio_distance_ber(uint32_t *hash_a , const int Na, uint32_t *hash_b, const int Nb, const float threshold, const int block_size, int &Nc);
 
-#endif
+#endif /* USE_AUDIO_HASH */
+#endif /* _AUDIO_HASH_H */

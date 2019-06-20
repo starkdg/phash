@@ -46,19 +46,17 @@
 #cmakedefine USE_IMAGE_HASH
 #cmakedefine USE_AUDIO_HASH
 #cmakedefine USE_VIDEO_HASH
-#cmakedefine USE_PTHREAD
+#cmakedefine USE_TEXT_HASH
 
 #define PACKAGE_STRING "${CMAKE_PROJECT_NAME}"
 
 #if defined(USE_IMAGE_HASH) || defined(USE_VIDEO_HASH)
+#define cimg_use_png
+#define cimg_use_jpeg
 #define cimg_debug 0
 #define cimg_display 0
 #include "CImg.h"
 using namespace cimg_library;
-#endif
-
-#ifdef USE_PTHREAD
-#include <pthread.h>
 #endif
 
 #ifndef __GLIBC__
@@ -88,35 +86,14 @@ typedef  int64_t  long64;
 extern "C" {
 #endif
 
-struct BinHash 
-{
+#ifdef USE_IMAGE_HASH
+
+/*! bmb image hash datatype
+*/
+typedef struct bmb_hash {
 	uint8_t *hash;
 	uint32_t bytelength;
-	uint32_t byteidx; // used by addbit()
-	uint8_t bitmask;  // used by addbit()
-
-	/*
-	 * add a single bit to hash. the bits are 
-	 * written from left to right.
-	 */
-	int addbit(uint8_t bit)
-	{
-		if (bitmask == 0) 
-		{
-			bitmask = 128; // reset bitmask to "10000000"
-			byteidx++;     // jump to next byte in array
-		}
-
-		if (byteidx >= bytelength) return -1;
-		
-		if (bit == 1) *(hash + byteidx) |= bitmask;
-		bitmask >>=1;
-		return 0;
-	}	
-};
-
-BinHash* _ph_bmb_new(uint32_t bytelength);
-void ph_bmb_free(BinHash *binHash);
+} BMBHash;
 
 /*! /brief Radon Projection info
  */
@@ -163,6 +140,12 @@ typedef struct ph_match{
 /*! /brief copyright information
  */
 const char* ph_about();
+
+void ph_bmb_free(BMBHash &bh);
+
+int ph_bmb_imagehash(const char *file, BMBHash &bmbhash);
+
+int ph_bmb_distance(const BMBHash &bh1, const BMBHash &bh2);
 
 /*! /brief radon function
  *  Find radon projections of N lines running through the image center for lines angled 0
@@ -248,13 +231,6 @@ int _ph_compare_images(const CImg<uint8_t> &imA,const CImg<uint8_t> &imB,double 
  */
 int ph_compare_images(const char *file1, const char *file2,double &pcc, double sigma = 3.5, double gamma=1.0, int N=180,double threshold=0.90);
 
-/*! /brief return dct matrix, C
- *  Return DCT matrix of sqare size, N
- *  /param N - int denoting the size of the square matrix to create.
- *  /return CImg<double> size NxN containing the dct matrix
- */
-static CImg<float>* ph_dct_matrix(const int N);
-
 /*! /brief compute dct robust image hash
  *  /param file string variable for name of file
  *  /param hash of type ulong64 (must be 64-bit variable)
@@ -262,15 +238,6 @@ static CImg<float>* ph_dct_matrix(const int N);
  */
 int ph_dct_imagehash(const char* file,ulong64 &hash);
 
-int ph_bmb_imagehash(const char *file, uint8_t method, BinHash **ret_hash);
-
-#ifdef USE_VIDEO_HASH
-static CImgList<uint8_t>* ph_getKeyFramesFromVideo(const char *filename);
-
-ulong64* ph_dct_videohash(const char *filename, int &Length);
-
-double ph_dct_videohash_dist(ulong64 *hashA, int N1, ulong64 *hashB, int N2, int threshold=21);
-#endif
 
 /* ! /brief dct video robust hash
  *   Compute video hash based on the dct of normalized video 32x32x64 cube
@@ -300,9 +267,23 @@ int ph_bitcount8(uint8_t val);
  *  /param lenA - int length of hashA 
  *  /param hashB - byte array for second hash
  *  /param lenB - int length of hashB
- *  /return double value for normalized hamming distance
+ *  /return int value for hamming distance
  **/
-double ph_hammingdistance2(uint8_t *hashA, int lenA, uint8_t *hashB, int lenB);
+int ph_hammingdistance2(uint8_t *hashA, int lenA, uint8_t *hashB, int lenB);
+
+
+#endif /** USE_IMAGE_HASH **/
+
+#ifdef USE_VIDEO_HASH
+static CImgList<uint8_t>* ph_getKeyFramesFromVideo(const char *filename);
+
+ulong64* ph_dct_videohash(const char *filename, int &Length);
+
+double ph_dct_videohash_dist(ulong64 *hashA, int N1, ulong64 *hashB, int N2, int threshold=21);
+#endif /** USE_VIDEO_HASH **/
+
+ 
+#ifdef USE_TEXT_HASH
 
 /** /brief textual hash for file
  *  /param filename - char* name of file
@@ -581,9 +562,11 @@ static const ulong64 textkeys[256] = {
     11236019945420619776LLU,
     11569021017716162560LLU
 };
+#endif /** USE_TEXT_HASH **/
+
 
 #ifdef __cplusplus
 }
 #endif
 
-#endif
+#endif /** _PHASH_H **/

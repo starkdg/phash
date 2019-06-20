@@ -22,20 +22,16 @@
 
 */
 
-
-
 #include "ph_fft.h"
 
-complex double polar_to_complex(const double r, const double theta)
-{
+complex double polar_to_complex(const double r, const double theta){
     complex double result;
     result = r*cos(theta) + r*sin(theta)*I;
 
     return result;
 }
 
-void fft_calc(const int N,const double *x,complex double *X,complex double *P,const int step,const complex double *twids)
-{
+void fft_calc(const int N,const double *x,complex double *X,complex double *P,const int step,const complex double *twids){
     complex double *S = P + N/2;
     if (N == 1){
 	X[0] = x[0];
@@ -55,8 +51,7 @@ void fft_calc(const int N,const double *x,complex double *X,complex double *P,co
 }
 
 
-int fft(double *x, int N, complex double *X)
-{
+int fft(double *x, int N, complex double *X){
 
     complex double *twiddle_factors = (complex double*)malloc(sizeof(complex double)*(N/2));
     complex double *Xt = (complex double*)malloc(sizeof(complex double)*N);

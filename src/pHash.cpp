@@ -23,12 +23,14 @@
 */
 
 #include "pHash.h"
-#ifdef HAVE_VIDEO_HASH
+#ifdef USE_VIDEO_HASH
 #include "cimgffmpeg.h"
 #endif
 
 const char phash_project[] = "%s. Copyright 2008-2010 Aetilius, Inc.";
+
 char phash_version[255] = {0};
+
 const char* ph_about(){
 	if(phash_version[0] != 0)
 		return phash_version;
@@ -36,7 +38,20 @@ const char* ph_about(){
 	snprintf(phash_version, sizeof(phash_version), phash_project, PACKAGE_STRING);
 	return phash_version;
 }
-#ifdef HAVE_IMAGE_HASH
+
+static CImg<float>* ph_dct_matrix(const int N){
+    CImg<float> *ptr_matrix = new CImg<float>(N,N,1,1,1/sqrt((float)N));
+    const float c1 = sqrt(2.0/N); 
+    for (int x=0;x<N;x++){
+		for (int y=1;y<N;y++){
+			*ptr_matrix->data(x,y) = c1*cos((cimg::PI/2/N)*y*(2*x+1));
+		}
+    }
+    return ptr_matrix;
+}
+
+#ifdef USE_IMAGE_HASH
+
 int ph_radon_projections(const CImg<uint8_t> &img,int N,Projections &projs){
 
     int width = img.width();
@@ -97,9 +112,7 @@ int ph_radon_projections(const CImg<uint8_t> &img,int N,Projections &projs){
     return EXIT_SUCCESS;
 
 }
-int ph_feature_vector(const Projections &projs, Features &fv)
-{
-
+int ph_feature_vector(const Projections &projs, Features &fv){
     CImg<uint8_t> *ptr_map = projs.R;
     CImg<uint8_t> projection_map = *ptr_map;
     int *nb_perline = projs.nb_pix_perline;
@@ -134,9 +147,9 @@ int ph_feature_vector(const Projections &projs, Features &fv)
     }
 
     return EXIT_SUCCESS;
-} 
-int ph_dct(const Features &fv,Digest &digest)
-{
+}
+
+int ph_dct(const Features &fv,Digest &digest){
     int N = fv.size;
     const int nb_coeffs = 40;
 
@@ -217,10 +230,6 @@ int ph_crosscorr(const Digest &x,const Digest &y,double &pcc,double threshold){
     return result;
 }
 
-#ifdef max
-#undef max
-#endif
-
 int _ph_image_digest(const CImg<uint8_t> &img,double sigma, double gamma,Digest &digest, int N){
     
     int result = EXIT_FAILURE;
@@ -261,6 +270,8 @@ cleanup:
     return result;
 }
 
+#ifdef max
+#undef max
 #define max(a,b) (((a)>(b))?(a):(b))
 
 int ph_image_digest(const char *file, double sigma, double gamma, Digest &digest, int N){
@@ -308,27 +319,16 @@ int ph_compare_images(const char *file1, const char *file2,double &pcc, double s
     return res;
 }
 
-CImg<float>* ph_dct_matrix(const int N){
-    CImg<float> *ptr_matrix = new CImg<float>(N,N,1,1,1/sqrt((float)N));
-    const float c1 = sqrt(2.0/N); 
-    for (int x=0;x<N;x++){
-	for (int y=1;y<N;y++){
-	    *ptr_matrix->data(x,y) = c1*cos((cimg::PI/2/N)*y*(2*x+1));
-	}
-    }
-    return ptr_matrix;
-}
-
 int ph_dct_imagehash(const char* file,ulong64 &hash){
 
-    if (!file){
-	return -1;
-    }
+    if (!file)
+		return -1;
+    
     CImg<uint8_t> src;
     try {
-	src.load(file);
+		src.load(file);
     } catch (CImgIOException& ex){
-	return -1;
+		return -1;
     }
     CImg<float> meanfilter(7,7,1,1,1);
     CImg<float> img;
@@ -339,7 +339,7 @@ int ph_dct_imagehash(const char* file,ulong64 &hash){
         int height = src.height();
 	img = src.crop(0,0,0,0,width-1,height-1,0,2).RGBtoYCbCr().channel(0).get_convolve(meanfilter);
     } else {
-	img = src.channel(0).get_convolve(meanfilter);
+		img = src.channel(0).get_convolve(meanfilter);
     }
 
     img.resize(32,32);
@@ -363,11 +363,120 @@ int ph_dct_imagehash(const char* file,ulong64 &hash){
     return 0;
 }
 
+#endif // USE_IMAGE_HASH
 
+
+
+int ph_hamming_distance(const ulong64 hash1,const ulong64 hash2){
+    ulong64 x = hash1^hash2;
+    return __builtin_popcountll(x);
+}
+
+
+
+CImg<float>* GetMHKernel(float alpha, float level){
+    int sigma = (int)4*pow((float)alpha,(float)level);
+    static CImg<float> *pkernel = NULL;
+    float xpos, ypos, A;
+    if (!pkernel){
+	pkernel = new CImg<float>(2*sigma+1,2*sigma+1,1,1,0);
+        cimg_forXY(*pkernel,X,Y){
+	    xpos = pow(alpha,-level)*(X-sigma);
+            ypos = pow(alpha,-level)*(Y-sigma);
+            A = xpos*xpos + ypos*ypos;
+            pkernel->atXY(X,Y) = (2-A)*exp(-A/2);
+	}
+    }
+    return pkernel;
+}
+
+uint8_t* ph_mh_imagehash(const char *filename, int &N,float alpha, float lvl){
+    if (filename == NULL){
+	return NULL;
+    }
+    uint8_t *hash = (unsigned char*)malloc(72*sizeof(uint8_t));
+    N = 72;
+
+    CImg<uint8_t> src(filename);
+    CImg<uint8_t> img;
+
+    if (src.spectrum() == 3){
+		img = src.get_RGBtoYCbCr().channel(0).blur(1.0).resize(512,512,1,1,5).get_equalize(256);
+    } else{
+		img = src.channel(0).get_blur(1.0).resize(512,512,1,1,5).get_equalize(256);
+    }
+    src.clear();
+
+    CImg<float> *pkernel = GetMHKernel(alpha,lvl);
+    CImg<float> fresp =  img.get_correlate(*pkernel);
+    img.clear();
+    fresp.normalize(0,1.0);
+    CImg<float> blocks(31,31,1,1,0);
+    for (int rindex=0;rindex < 31;rindex++){
+		for (int cindex=0;cindex < 31;cindex++){
+			blocks(rindex,cindex) = fresp.get_crop(rindex*16,cindex*16,rindex*16+16-1,cindex*16+16-1).sum();
+		}
+    }
+    int hash_index;
+    int nb_ones = 0, nb_zeros = 0;
+    int bit_index = 0;
+    unsigned char hashbyte = 0;
+    for (int rindex=0;rindex < 31-2;rindex+=4){
+		CImg<float> subsec;
+		for (int cindex=0;cindex < 31-2;cindex+=4){
+			subsec = blocks.get_crop(cindex,rindex, cindex+2, rindex+2).unroll('x');
+			float ave = subsec.mean();
+			cimg_forX(subsec, I){
+				hashbyte <<= 1;
+				if (subsec(I) > ave){
+					hashbyte |= 0x01;
+					nb_ones++;
+				} else {
+					nb_zeros++;
+				}
+				bit_index++;
+				if ((bit_index%8) == 0){
+					hash_index = (int)(bit_index/8) - 1; 
+					hash[hash_index] = hashbyte;
+					hashbyte = 0x00;
+				}
+			}
+		}
+	}
+
+    return hash;
+}
 #endif
 
-#if defined(HAVE_VIDEO_HASH) && defined(HAVE_IMAGE_HASH)
+int ph_bitcount8(uint8_t val){
+    int num = 0;
+    while (val){
+	++num;
+	val &= val - 1;
+    }
+    return num;
+}
 
+
+
+int ph_hammingdistance2(uint8_t *hashA, int lenA, uint8_t *hashB, int lenB){
+    if (lenA != lenB)
+		return -1.0;
+    
+    if ((hashA == NULL) || (hashB == NULL) || (lenA <= 0))
+		return -1.0;
+    
+    int dist = 0;
+    uint8_t d = 0;
+    for (int i=0;i<lenA;i++){
+		d = hashA[i]^hashB[i];
+		dist  += ph_bitcount8(d);
+    }
+
+    return dist;
+}
+
+#ifdef USE_VIDEO_HASH
 
 CImgList<uint8_t>* ph_getKeyFramesFromVideo(const char *filename){
 
@@ -611,118 +720,10 @@ double ph_dct_videohash_dist(ulong64 *hashA, int N1, ulong64 *hashB, int N2, int
     return result;
 }
 
-#endif
-
-int ph_hamming_distance(const ulong64 hash1,const ulong64 hash2){
-    ulong64 x = hash1^hash2;
-    return __builtin_popcountll(x);
-}
-
-#ifdef HAVE_IMAGE_HASH
-
-CImg<float>* GetMHKernel(float alpha, float level){
-    int sigma = (int)4*pow((float)alpha,(float)level);
-    static CImg<float> *pkernel = NULL;
-    float xpos, ypos, A;
-    if (!pkernel){
-	pkernel = new CImg<float>(2*sigma+1,2*sigma+1,1,1,0);
-        cimg_forXY(*pkernel,X,Y){
-	    xpos = pow(alpha,-level)*(X-sigma);
-            ypos = pow(alpha,-level)*(Y-sigma);
-            A = xpos*xpos + ypos*ypos;
-            pkernel->atXY(X,Y) = (2-A)*exp(-A/2);
-	}
-    }
-    return pkernel;
-}
-
-uint8_t* ph_mh_imagehash(const char *filename, int &N,float alpha, float lvl){
-    if (filename == NULL){
-	return NULL;
-    }
-    uint8_t *hash = (unsigned char*)malloc(72*sizeof(uint8_t));
-    N = 72;
-
-    CImg<uint8_t> src(filename);
-    CImg<uint8_t> img;
-
-    if (src.spectrum() == 3){
-	img = src.get_RGBtoYCbCr().channel(0).blur(1.0).resize(512,512,1,1,5).get_equalize(256);
-    } else{
-	img = src.channel(0).get_blur(1.0).resize(512,512,1,1,5).get_equalize(256);
-    }
-    src.clear();
-
-    CImg<float> *pkernel = GetMHKernel(alpha,lvl);
-    CImg<float> fresp =  img.get_correlate(*pkernel);
-    img.clear();
-    fresp.normalize(0,1.0);
-    CImg<float> blocks(31,31,1,1,0);
-    for (int rindex=0;rindex < 31;rindex++){
-		for (int cindex=0;cindex < 31;cindex++){
-			blocks(rindex,cindex) = fresp.get_crop(rindex*16,cindex*16,rindex*16+16-1,cindex*16+16-1).sum();
-		}
-    }
-    int hash_index;
-    int nb_ones = 0, nb_zeros = 0;
-    int bit_index = 0;
-    unsigned char hashbyte = 0;
-    for (int rindex=0;rindex < 31-2;rindex+=4){
-		CImg<float> subsec;
-		for (int cindex=0;cindex < 31-2;cindex+=4){
-			subsec = blocks.get_crop(cindex,rindex, cindex+2, rindex+2).unroll('x');
-			float ave = subsec.mean();
-			cimg_forX(subsec, I){
-				hashbyte <<= 1;
-				if (subsec(I) > ave){
-					hashbyte |= 0x01;
-					nb_ones++;
-				} else {
-					nb_zeros++;
-				}
-				bit_index++;
-				if ((bit_index%8) == 0){
-					hash_index = (int)(bit_index/8) - 1; 
-					hash[hash_index] = hashbyte;
-					hashbyte = 0x00;
-				}
-			}
-		}
-	}
-
-    return hash;
-}
-#endif
-
-int ph_bitcount8(uint8_t val){
-    int num = 0;
-    while (val){
-	++num;
-	val &= val - 1;
-    }
-    return num;
-}
+#endif /* USE_VIDEO_HASH */
 
 
-
-double ph_hammingdistance2(uint8_t *hashA, int lenA, uint8_t *hashB, int lenB){
-    if (lenA != lenB){
-	return -1.0;
-    }
-    if ((hashA == NULL) || (hashB == NULL) || (lenA <= 0)){
-	return -1.0;
-    }
-    double dist = 0;
-    uint8_t D = 0;
-    for (int i=0;i<lenA;i++){
-	D = hashA[i]^hashB[i];
-	dist = dist + (double)ph_bitcount8(D);
-    }
-    double bits = (double)lenA*8;
-    return dist/bits;
-
-}
-
+#ifdef USE_TEXT_HASH
 
 TxtHashPoint* ph_texthash(const char *filename,int *nbpoints){
     int count;
@@ -859,4 +860,7 @@ TxtMatch* ph_compare_text_hashes(TxtHashPoint *hash1, int N1, TxtHashPoint *hash
     }
     return found_matches;
 }
+
+#endif /* USE_TEXT_HASH */
+
 

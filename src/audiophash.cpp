@@ -30,6 +30,8 @@
 #include <mpg123.h>
 #endif
 
+#ifdef USE_AUDIO_HASH
+
 int ph_count_samples(const char *filename, int sr,int channels){
 
     SF_INFO sf_info;
@@ -495,6 +497,9 @@ double* ph_audio_distance_ber(uint32_t *hash_a , const int Na, uint32_t *hash_b,
     free(dist);
     return pC;
 }
+
+#endif /* USE_AUDIO_HASH */
+
 
 /**
 
