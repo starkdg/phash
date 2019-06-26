@@ -1,1 +1,8 @@
 .svn/
+CMakeFiles/*
+CMakeCache.txt
+CPack*
+CTestTest*
+Makefile
+Testing/*
+cmake_install.cmake

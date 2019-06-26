@@ -1,4 +1,4 @@
-cmake_minimum_required (VERSION 3.13)
+cmake_minimum_required (VERSION 3.7.2)
 
 include(ExternalProject)
 
@@ -6,7 +6,7 @@ project(pHash)
 
 set(CMAKE_PROJECT_VERSION 0.9.7)
 
-set(CMAKE_BUILD_TYPE Release CACHE STRING "build type" FORCE)
+set(CMAKE_BUILD_TYPE Debug CACHE STRING "build type" FORCE)
 set(USE_IMAGE_HASH ON CACHE BOOLEAN "compile image hashes" FORCE)
 set(USE_AUDIO_HASH OFF CACHE BOOLEAN "compile audio hashes" FORCE)
 set(USE_VIDEO_HASH OFF CACHE BOOLEAN "compile video hash" FORCE)
@@ -25,24 +25,25 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src)
 
 if (USE_IMAGE_HASH)
   find_library(libpng png)
-  if (libpng-NOTFOUND)
-	message(SEND_ERROR "no libpng found")
+  if(libpng-NOTFOUND)
+	message(WARNING "no libpng-dev found")
+  else()
+	set(USE_PNG 1)
   endif()
   find_library(libjpeg jpeg)
-  if (libjpeg-NOTFOUND)
-	message(SEND_ERROR "no libjpeg found")
+  if(libjpeg-NOTFOUND)
+	message(WARNING "no libjpeg found")
+  else()
+	set(USE_JPEG 1)
   endif()
   find_library(libtiff tiff)
   if (libtiff-NOTFOUND)
-	message(SEND_ERROR "no libtiff found")
+	message(WARNING  "no libtiff found")
+  else()
+	set(USE_TIFF 1)
   endif()
-  find_library(librt rt)
-  if (librt-NOTFOUND)
-	message(FATAL_ERROR "no rt library found")
-  endif()
-
   list(APPEND LIB_SRCS src/pHash.cpp src/bmbhash.cpp)
-  list(APPEND LIB_DEPS png jpeg tiff pthread rt)
+  list(APPEND LIB_DEPS png jpeg tiff)
 endif()
 
 if (USE_AUDIO_HASH)
@@ -66,7 +67,7 @@ if (USE_AUDIO_HASH)
   if (libogg-NOTFOUND)
 	message(FATAL_ERROR "no libogg found")
   endif()
-  
+
   list(APPEND LIB_SRCS "src/audiophash.cpp" "src/ph_fft.c")
   list(APPEND LIB_DEPS ${libsnd} ${libsamplerate} ${libmpg123} ${libvorbis} ${libogg})
 endif()
@@ -88,17 +89,13 @@ if (USE_VIDEO_HASH)
   list(APPEND LIB_DEPS ${libavformat} ${libavcodec} ${libswscale})
 endif()
 
+
 add_library(pHash SHARED ${LIB_SRCS})
 set_property(TARGET pHash PROPERTY VERSION ${CMAKE_PROJECT_VERSION})
-add_library(pHash-static STATIC ${LIB_SRCS})
-set_property(TARGET pHash-static PROPERTY SOVERSION ${CMAKE_PROJECT_VERSION_MAJOR})
-
-target_link_libraries(pHash ${LIB_DEPS})
 target_link_libraries(pHash	${LIBS_DEPS})
 
 
 install(TARGETS pHash DESTINATION lib)
-install(TARGETS pHash-static DESTINATION lib)
 if (USE_IMAGE_HASH OR USE_VIDEO_HASH OR USE_TEXT_HASH)
   install(FILES src/pHash.h DESTINATION include)
 endif()
@@ -106,42 +103,49 @@ if (USE_AUDIO_HASH)
   install(FILES src/audiophash.h DESTINATION include)
 endif()
 
-if(HAVE_IMAGE_HASH)
-add_executable(TestDCT "examples/test_imagephash.cpp")
-target_link_libraries (TestDCT pHash)
-
-
-add_executable(TestBMB "examples/test_bmbimagehash.cpp")
-target_link_libraries (TestBMB pHash)
-
-
-add_executable(TestMH "examples/test_mhimagehash.cpp")
-target_link_libraries (TestMH pHash)
-endif()
-
-
-if(HAVE_AUDIO_HASH)
-add_executable(TestAudio "examples/test_audiophash.cpp")
-target_link_libraries (TestAudio pHash)
-endif()
-
-if(HAVE_VIDEO_HASH)
-add_executable(TestVideoHash "examples/test_dctvideohash.cpp")
-target_link_libraries (TestVideoHash pHash)
-endif()
-
 # tests
 enable_testing()
+
+if(USE_AUDIO_HASH)
 add_executable(Testfft tests/fft-test.c)
 target_include_directories(Testfft PRIVATE src)
-target_link_libraries(Testfft pHash)
+target_link_libraries(Testfft pHash ${LIB_DEPS})
 add_test(NAME test_fft COMMAND Testfft)
+endif()
 
+if(USE_IMAGE_HASH)
 add_executable(Testdct tests/dct-imagehash-test.cpp)
 target_include_directories(Testdct PRIVATE src)
-target_link_libraries(Testdct pHash)
-add_test(Test_dct Testdct resources/img1.jpg resources/img2.jpg)
+target_link_libraries(Testdct pHash ${LIB_DEPS})
+add_test(Test_dct Testdct resources/img1.jpg resources/img1.jpg 0)
+add_test(Test_dct2 Testdct resources/img1.jpg resources/img2.jpg  2)
+add_test(Test_dct3 Testdct resources/img1.jpg resources/img3.jpg 31)
+add_test(Test_dct4 Testdct resources/img2.jpg resources/img3.jpg 33)
 
+add_executable(Testbmb tests/bmb-imagehash-test.cpp)
+target_include_directories(Testbmb PRIVATE src)
+target_link_libraries(Testbmb pHash ${LIB_DEPS})
+add_test(Test_bmb1 Testbmb resources/img1.jpg resources/img1.jpg 0)
+add_test(Test_bmb2 Testbmb resources/img1.jpg resources/img2.jpg 0)
+add_test(Test_bmb3 Testbmb resources/img1.jpg resources/img3.jpg 150)
+add_test(Test_bmb4 Testbmb resources/img2.jpg resources/img3.jpg 150)
+
+add_executable(Testmh tests/mh-imagehash-test.cpp)
+target_include_directories(Testmh PRIVATE src)
+target_link_libraries(Testmh pHash ${LIB_DEPS})
+add_test(Test_mh1 Testmh resources/img1.jpg resources/img1.jpg 0)
+add_test(Test_mh2 Testmh resources/img1.jpg resources/img2.jpg 78)
+add_test(Test_mh3 Testmh resources/img1.jpg resources/img3.jpg 305)
+add_test(Test_mh4 Testmh resources/img2.jpg resources/img3.jpg 299)
+
+add_executable(Testrh tests/radial-imagehash-test.cpp)
+target_include_directories(Testrh PRIVATE src)
+target_link_libraries(Testrh pHash ${LIB_DEPS})
+add_test(Test_rh1 Testrh resources/img1.jpg resources/img1.jpg 1.0000)
+add_test(Test_rh2 Testrh resources/img1.jpg resources/img2.jpg 0.999954)
+add_test(Test_rh3 Testrh resources/img1.jpg resources/img3.jpg 0.843873)
+add_test(Test_rh4 Testrh resources/img2.jpg resources/img3.jpg 0.843654)
+endif()
 
 include (InstallRequiredSystemLibraries)
 set(CPACK_GENERATOR "TGZ")

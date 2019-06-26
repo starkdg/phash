@@ -14,19 +14,21 @@ int main(int argc, char **argv){
 	assert(image_file1 != NULL);
 	assert(image_file2 != NULL);
 
-	ulong64 hash1;
-	int rc = ph_dct_imagehash(image_file1, hash1);
-	assert(rc == 0);
-
-	ulong64 hash2;
-	rc = ph_dct_imagehash(image_file2, hash2);
+	BMBHash hash1, hash2;
+	int rc = ph_bmb_imagehash(image_file1, hash1);
 	assert(rc == 0);
 	
-	int d = ph_hamming_distance(hash1, hash2);
-	assert(d == expected);
+	rc = ph_bmb_imagehash(image_file2, hash2);
+	assert(rc == 0);
+	
+	int d = ph_bmb_distance(hash1, hash2);
+	assert(d >= 0);
 
-	printf("file: %x %s\n", hash1, image_file1);
-	printf("file: %x %s\n", hash2, image_file2);
+	ph_bmb_free(hash1);
+	ph_bmb_free(hash2);
+	
+	printf("file: %s hash[%d]\n", image_file1, hash1.bytelength);
+	printf("file: %s hash[%d]\n", image_file2, hash2.bytelength);
 	printf("d = %d\n", d);
 	
 	return 0;

@@ -34,4 +34,4 @@
 
 int fft(double *x, int N, complex double *X);
 
-#endif
+#endif /* _FFT_H */

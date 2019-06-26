@@ -44,15 +44,15 @@
 #include <stdint.h>
 
 #cmakedefine USE_IMAGE_HASH
-#cmakedefine USE_AUDIO_HASH
 #cmakedefine USE_VIDEO_HASH
 #cmakedefine USE_TEXT_HASH
 
 #define PACKAGE_STRING "${CMAKE_PROJECT_NAME}"
 
 #if defined(USE_IMAGE_HASH) || defined(USE_VIDEO_HASH)
-#define cimg_use_png
-#define cimg_use_jpeg
+#define cimg_use_png ${USE_PNG}
+#cmakedefine cimg_use_jpeg ${USE_JPEG}
+#cmakedefine cimg_use_tiff ${USE_TIFF}
 #define cimg_debug 0
 #define cimg_display 0
 #include "CImg.h"
@@ -95,29 +95,19 @@ typedef struct bmb_hash {
 	uint32_t bytelength;
 } BMBHash;
 
-/*! /brief Radon Projection info
- */
-typedef struct ph_projections {
-    CImg<uint8_t> *R;           //contains projections of image of angled lines through center
-    int *nb_pix_perline;        //the head of int array denoting the number of pixels of each line
-    int size;                   //the size of nb_pix_perline
-}Projections;
-
 /*! /brief feature vector info
  */
 typedef struct ph_feature_vector {
     double *features;           //the head of the feature array of double's
-    int size;                   //the size of the feature array
+    int n_features;                   //the size of the feature array
 }Features;
 
 /*! /brief Digest info
  */
 typedef struct ph_digest {
-    char *id;                   //hash id
     uint8_t *coeffs;            //the head of the digest integer coefficient array
-    int size;                   //the size of the coeff array
+    int n_coeffs;                   //the size of the coeff array
 } Digest;
-
 
 /* variables for textual hash */
 const int KgramLength = 50;
@@ -141,100 +131,69 @@ typedef struct ph_match{
  */
 const char* ph_about();
 
+/*! free buffer alloc'd for bmbhash
+*/
 void ph_bmb_free(BMBHash &bh);
 
+/*! compute bmb image hash
+*  /param filename
+*  /param bmbhash (out)
+*  /return 0 on success, -1 on failure
+**/
 int ph_bmb_imagehash(const char *file, BMBHash &bmbhash);
 
+/*! compute distance between two bmb image hashes
+* /param bh1 bmb image hash 1
+* /param bh2 bmb image hash 2
+* /return 0 on success, -1 on failure
+*/
 int ph_bmb_distance(const BMBHash &bh1, const BMBHash &bh2);
 
-/*! /brief radon function
- *  Find radon projections of N lines running through the image center for lines angled 0
- *  to 180 degrees from horizontal.
- *  /param img - CImg src image
- *  /param  N  - int number of angled lines to consider.
- *  /param  projs - (out) Projections struct 
- *  /return int value - less than 0 for error
- */
-int ph_radon_projections(const CImg<uint8_t> &img,int N,Projections &projs);
-
-/*! /brief feature vector
- *         compute the feature vector from a radon projection map.
- *  /param  projs - Projections struct
- *  /param  fv    - (out) Features struct
- *  /return int value - less than 0 for error
+/*! free data alloc'd for a feature vector
 */
-int ph_feature_vector(const Projections &projs,Features &fv);
+void ph_free_feature(Features &fv);
 
-/*! /brief dct 
- *  Compute the dct of a given vector
- *  /param R - vector of input series
- *  /param D - (out) the dct of R
- *  /return  int value - less than 0 for error
+/*! free data alloc'd in a image digest
 */
-int ph_dct(const Features &fv, Digest &digest);
+void ph_free_digest(Digest &digest);
 
-/*! /brief cross correlation for 2 series
- *  Compute the cross correlation of two series vectors
- *  /param x - Digest struct
- *  /param y - Digest struct
- *  /param pcc - double value the peak of cross correlation
- *  /param threshold - double value for the threshold value for which 2 images
- *                     are considered the same or different.
- *  /return - int value - 1 (true) for same, 0 (false) for different, < 0 for error
+/*! /brief aux. function used to compute an image digest
+*  /param src source image
+*  /param n_angles no. angles through center to base the hash on
+*  /param fv (out) feature vector
+*  /return 0 on success, -1 on failure
+*/
+int ph_feature_vector(const CImg<float> &src, const int n_angles, Features &fv);
+
+/*! /brief aux. function used by image_digest for computing dct of a feature vector
+ *  /param fv, feature vector
+ *  /param digest (out)
+ *  /return 0 on success, -1 on failure
  */
+int ph_dct(const Features &fv,Digest &digest);
 
-int ph_crosscorr(const Digest &x,const Digest &y,double &pcc, double threshold = 0.90);
+/*! /brief compute image digest based on radial image hash
+*  /param filename
+*  /param sigma - pre-processing gaussian blur (e.g. 1.0)
+*  /param gamma - pre-processing gamma correction (e.g. 1.0)
+*  /param digest (out)
+*  /param n_angles - no. angles through center to use for image hash (e.g. 180)
+*  /return int 0 on success, -1 on failure
+*/
+int ph_image_digest(const char *file,const double sigma, const double gamma,Digest &digest, const int n_angles);
 
-/*! /brief image digest
- *  Compute the image digest for an image given the input image
- *  /param img - CImg object representing an input image
- *  /param sigma - double value for the deviation for a gaussian filter function 
- *  /param gamma - double value for gamma correction on the input image
- *  /param digest - (out) Digest struct
- *  /param N      - int value for the number of angles to consider. 
- *  /return       - less than 0 for error
- */
-int _ph_image_digest(const CImg<uint8_t> &img,double sigma, double gamma,Digest &digest,int N=180);
-
-/*! /brief image digest
- *  Compute the image digest given the file name.
- *  /param file - string value for file name of input image.
- *  /param sigma - double value for the deviation for gaussian filter
- *  /param gamma - double value for gamma correction on the input image.
- *  /param digest - Digest struct
- *  /param N      - int value for number of angles to consider
- */
-int ph_image_digest(const char *file, double sigma, double gamma, Digest &digest,int N=180);
-
-
-/*! /brief compare 2 images
- *  /param imA - CImg object of first image 
- *  /param imB - CImg object of second image
- *  /param pcc   - (out) double value for peak of cross correlation
- *  /param sigma - double value for the deviation of gaussian filter
- *  /param gamma - double value for gamma correction of images
- *  /param N     - int number for the number of angles of radon projections
- *  /param theshold - double value for the threshold
- *  /return int 0 (false) for different images, 1 (true) for same image, less than 0 for error
- */
-int _ph_compare_images(const CImg<uint8_t> &imA,const CImg<uint8_t> &imB,double &pcc, double sigma = 3.5, double gamma = 1.0,int N=180,double threshold=0.90);
-
-/*! /brief compare 2 images
- *  Compare 2 images given the file names
- *  /param file1 - char string of first image file
- *  /param file2 - char string of second image file
- *  /param pcc   - (out) double value for peak of cross correlation
- *  /param sigma - double value for deviation of gaussian filter
- *  /param gamma - double value for gamma correction of images
- *  /param N     - int number for number of angles
- *  /return int 0 (false) for different image, 1 (true) for same images, less than 0 for error
- */
-int ph_compare_images(const char *file1, const char *file2,double &pcc, double sigma = 3.5, double gamma=1.0, int N=180,double threshold=0.90);
+/*! /brief compute cross-correlation between two image digests
+ *  /param digest x
+ *  /param digest y
+ *  /param pcc (out)
+ *  /return int 0 on success, -1 on failure
+*/
+int ph_peakcrosscorr(const Digest &x,const Digest &y,double &pcc);
 
 /*! /brief compute dct robust image hash
  *  /param file string variable for name of file
  *  /param hash of type ulong64 (must be 64-bit variable)
- *  /return int value - -1 for failure, 1 for success
+ *  /return int value - -1 for failure, 0 for success
  */
 int ph_dct_imagehash(const char* file,ulong64 &hash);
 
