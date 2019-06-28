@@ -64,24 +64,24 @@ Boost 1.70.0 - Only the filesystem, system and program_options libraries.
 
 ## Requirements for Image Hash
 
-CImg v.6.6 (included)
-libtiff-dev (optional)
-libpng-dev (optional)
+CImg v.6.6 (included) \   
+libtiff-dev (optional) \
+libpng-dev (optional) \
 libjpeg-dev (optional)
 
 
 ## Requirements for Video Hash
 
-ffmpeg v2.8.15 "feynman release" 
-  libavformat
-  libavcodec
+ffmpeg v2.8.15 "feynman release" \
+  libavformat \
+  libavcodec \
   libavswscale
 
 ## Requirements for Audio Hash
 
-libsndfile v1.0.27
-libsamplerate v0.1.8
-libmpg123 v1.23.8 (optional)
-libvorbis v1.3.5 (optional)
+libsndfile v1.0.27 \
+libsamplerate v0.1.8 \
+libmpg123 v1.23.8 (optional) \
+libvorbis v1.3.5 (optional) \
 libogg v1.3.2 (optional)
 
