@@ -22,170 +22,349 @@
 
 */
 
-#include <stdio.h>
-#include <dirent.h>
-#include <errno.h>
+#include <iostream>
+#include <fstream>
+#include <iomanip>
 #include <vector>
 #include <algorithm>
+#include <string>
+#include <cmath>
+#include <limits>
+#include <stdexcept>
+#include <boost/filesystem.hpp>
+#include <boost/program_options.hpp>
 #include "pHash.h"
 
 using namespace std;
 
-#define TRUE 1
-#define FALSE 0
+namespace fs=boost::filesystem;
+namespace po=boost::program_options;
 
-//data structure for a hash and id
-struct ph_imagepoint{
-    ulong64 hash;
-    char *id;
-};
+enum ImgHash {DCTHASH=1, RADIALHASH, MHASH, BMBHASH };
 
-//aux function to create imagepoint data struct
-struct ph_imagepoint* ph_malloc_imagepoint(){
+int read_filenames_from_dir(const fs::path &dname, vector<fs::path> &files);
 
-    return (struct ph_imagepoint*)malloc(sizeof(struct ph_imagepoint));
+double compare_dct_imagehash(const fs::path &file1, const fs::path &file2);
 
+double compare_radial_imagehash(const fs::path &file1, const fs::path &file2);
+
+double compare_mh_imagehash(const fs::path &file1, const fs::path &file2);
+
+double compare_bmb_imagehash(const fs::path &file1, const fs::path &file2);
+
+double compare_images(const fs::path &file1, const fs::path &file2, const ImgHash method);
+
+int calc_inter_distances(const vector<fs::path> &files1, const vector<fs::path> &files2,
+					vector<double> &distances, const ImgHash method);
+
+int calc_intra_distances(const vector<fs::path> &files, vector<double> &distances, const ImgHash method);
+
+int find_stats(const vector<double> &values, double &minval, double &maxval, double &mean, double &var);
+
+int compute_histogram(const vector<double> &values, const double max_value, const int nbins, vector<double> &histogram);
+
+
+typedef struct Args {
+	string dir1;
+	string dir2;
+	string outfile;
+	bool help;
+	int method;
+	int nbins;
+} Args;
+
+Args parse_options(int argc, char **argv){
+	Args args;
+	po::options_description descr("Available Options");
+	descr.add_options()
+		("help,h", "usage information")
+		("dir1", po::value<string>(&args.dir1)->required(), "path to directory 1")
+		("dir2", po::value<string>(&args.dir2)->required(), "path to directory 2")
+		("output, o", po::value<string>(&args.outfile)->default_value("histogram.dat"),
+		                   "filename to write histogram values")
+		("method,m", po::value<int>(&args.method)->default_value(1),
+		                         "Specify image hash method to use.\n"
+                                  "Method:\n"
+		                          "\t 1 - dct image hash\n" 
+		                          "\t 2 - radial image hash\n"
+                                  "\t 3 - mh image hash\n"
+		                          "\t 4 - bmb image hash\n\n")
+		("nbins,b", po::value<int>(&args.nbins)->default_value(64),
+		                          "number of histogram bins");
+
+	po::variables_map vm;
+	
+	try {
+		po::store(po::parse_command_line(argc, argv, descr), vm);
+		po::notify(vm); 
+		
+		if (vm.count("help")){
+			cout << endl << descr << endl << endl;
+			exit(0);
+		}
+		
+	} catch (exception &ex){
+		cout << "ERROR: " << ex.what() << endl;
+		cout << endl << descr << endl << endl;
+		exit(0);
+	}
+
+	return args;
 }
 
-//auxiliary function for sorting list of hashes 
-bool cmp_lt_imp(struct ph_imagepoint dpa, struct ph_imagepoint dpb){
-    int result = strcmp(dpa.id, dpb.id);
-    if (result < 0)
-	return TRUE;
-    return FALSE;
-}
-/** TEST for image DCT hash function 
- *  The program reads all images from the two directories given on the command line.
- *  The program expects the same number of image files in each directory. Each image 
- *  should be perceptually similar to a corresponding file in the other directory and
- *  have the same exact name.  For example, one directory could contain the originals,
- *  and the other directory blurred counterparts.  The program calculates the hashes.
- *  First, the hamming distances are calculated between all similar image hashes (-i.e. 
- *  the intra compares), and then hamming distances for different images hashes (-i.e. 
- *  the inter compares).
-**/
+
 int main(int argc, char **argv){
+	Args args = parse_options(argc, argv);
+	
+	const ImgHash method = (ImgHash)args.method;
+	const int nbins = args.nbins;
+	const string outfile = args.outfile;
+	
+	const fs::path dirname1(args.dir1);
+	const fs::path dirname2(args.dir2);
 
-    const char *msg = ph_about();
-    printf(" %s\n", msg);
+	cout << "compare files in two directories" << endl;
+	cout << "dir: " << dirname1 << endl;
+	cout << "dir: " << dirname2 << endl;
+	
+	vector<fs::path> files1;
+	int n1 = read_filenames_from_dir(dirname1, files1);
+	assert(n1 >= 0);
+	
+	cout << "dir: " << dirname1 << " (" << n1 << " files)" << endl;
 
-    if (argc < 3){
-	printf("no input args\n");
-	printf("expected: \"test_imagephash [dir name] [dir_name]\"\n");
-	exit(1);
-    }
-    const char *dir_name = argv[1];
-    const char *dir_name2 = argv[2];
-    struct dirent *dir_entry;
-    vector<ph_imagepoint> hashlist1; //for hashes in first directory
-    vector<ph_imagepoint> hashlist2; //for hashes in second directory
-    ph_imagepoint *dp = NULL;
+	vector<fs::path> files2;
+	int n2 = read_filenames_from_dir(dirname2, files2);
+	assert(n2 >= 0);
+	assert(n1 == n2);
 
-    //first directory
-    DIR *dir = opendir(dir_name);
-    if (!dir){
-	printf("unable to open directory\n");
-	exit(1);
-    }
-    errno = 0;
-    int i = 0;
-    ulong64 tmphash;
-    char path[100];
-    path[0] = '\0';
-    while ((dir_entry = readdir(dir)) != 0){
-	if (strcmp(dir_entry->d_name,".") && strcmp(dir_entry->d_name,"..")){
-	    strcat(path, dir_name);
-	    strcat(path, "/");
-	    strcat(path, dir_entry->d_name);
-	    if (ph_dct_imagehash(path, tmphash) < 0)  //calculate the hash
-		continue;
-            dp = ph_malloc_imagepoint();              //store in structure with file name
-	    dp->id = dir_entry->d_name;
-	    dp->hash = tmphash;
-	    hashlist1.push_back(*dp);
-	    i++;
+	cout << "dir: " << dirname2 << " (" << n2 << " files)" << endl;
+	cout << "Calculate distances between similar files ..." << endl;
+
+	vector<double> interdistances;
+	int rc = calc_inter_distances(files1, files2, interdistances, method);
+	assert(rc == 0);
+
+	cout << "Calculate distances between dissimilar files ..." << endl;
+
+	vector<double> intradistances;
+	rc = calc_intra_distances(files1, intradistances, method);
+	assert(rc == 0);
+
+	/* find maximum of distance range */
+	double min_d, max_d, mean_d, var_d;
+	find_stats(intradistances, min_d, max_d, mean_d, var_d);
+
+
+	/* calculate histograms */
+	vector<double> inter_histogram;
+	compute_histogram(interdistances, max_d, nbins, inter_histogram);
+
+	vector<double> intra_histogram;
+	compute_histogram(intradistances, max_d, nbins, intra_histogram);
+
+
+	/* write out histograms to output file */
+	ofstream ostrm(outfile, ios::out|ios::trunc);
+	for (int i=0;i<nbins;i++){
+		ostrm << left << setw(10) << i << left << setw(10) << inter_histogram[i]
+			  << left << setw(10) << intra_histogram[i] << endl;
 	}
-	errno = 0;
-        path[0]='\0';
-    }
-
-    if (errno){
-	printf("error reading directory\n");
-	exit(1);
-    }
-
-    sort(hashlist1.begin(),hashlist1.end(),cmp_lt_imp);
-
-    //second directory
-    dir_entry = NULL;
-    DIR *dir2 = opendir(dir_name2);
-    if (!dir){
-	printf("unable to open directory\n");
-	exit(1);
-    }
-    errno = 0;
-    path[0] = '\0';
-    i=0;
-    while ((dir_entry = readdir(dir2)) != 0){
-	if (strcmp(dir_entry->d_name,".") && strcmp(dir_entry->d_name,"..")){
-	    strcat(path,dir_name2);
-	    strcat(path,"/");
-	    strcat(path,dir_entry->d_name);
-	    if (ph_dct_imagehash(path,tmphash) < 0)    //calculate the hash
-		continue;
-    	    dp = ph_malloc_imagepoint();               //store in structure with filename
-	    dp->id = dir_entry->d_name;
-	    dp->hash = tmphash;
-	    hashlist2.push_back(*dp);
-	    i++;
-	}
-	errno = 0;
-	path[0] = '\0';
-    }
-
-    if (errno){
-	printf("error reading directory\n");
-	exit(1);
-    }
-
-    sort(hashlist2.begin(),hashlist2.end(),cmp_lt_imp);
-
-    int nbfiles1 = hashlist1.size();
-    int nbfiles2 = hashlist2.size();
-    int nbfiles = nbfiles1;
-    if (nbfiles1 != nbfiles2){
-	nbfiles = (nbfiles2 > nbfiles1) ? nbfiles2:nbfiles1;
-    }
-    
-    int distance = -1;
-    printf("**************************\n");
-    printf("intra distance comparisons\n");
-    printf("**************************\n");
-    for (i=0;i<nbfiles;i++){
-	printf(" %d %s %s ",i,hashlist1[i].id, hashlist2[i].id);
-
-	//calculate distance
-	distance = ph_hamming_distance(hashlist1[i].hash,hashlist2[i].hash);
-
-	printf(" dist = %d\n",distance);
-    }
-
-
-    printf("**************************\n");
-    printf("inter distance comparisons\n");
-    printf("**************************\n");
-    for (i=0;i<nbfiles1;i++){
-	for (int j=i+1;j<nbfiles1;j++){
-	    printf(" %s %s ", hashlist1[i].id, hashlist1[j].id);
-
-	    //calculate distance
-	    distance = ph_hamming_distance(hashlist1[i].hash,hashlist1[j].hash);
-
-	    printf(" dist = %d\n",distance);
-	}
-    }
-    printf("**************************\n");
-
-
+	
+	cout << "Done" << endl;
     return 0;
 }
+
+
+/**
+ * **************************************************************** 
+ *
+ *	             Auxiliary functions below this point.
+ *
+ *
+ * ****************************************************************
+ **/
+
+int read_filenames_from_dir(const fs::path &dname, vector<fs::path> &files){
+
+	int n_files = 0;
+	try {
+		if (fs::exists(dname) && fs::is_directory(dname)){
+
+			for (auto &&entry : fs::directory_iterator(dname)){
+				files.push_back(entry.path());
+				n_files++;
+			}
+			sort(files.begin(), files.end());
+		} else {
+			n_files = -1;
+		}
+	} catch (fs::filesystem_error &ex){
+		cout << "ERROR reading from " << dname << " : " << ex.what() << endl;;
+		return -1;
+	}
+	
+	return n_files;
+}
+
+double compare_dct_imagehash(const fs::path &file1, const fs::path &file2){
+
+	ulong64 hash1;
+	if (ph_dct_imagehash(file1.c_str(), hash1) < 0)
+		return -1.0;
+
+	ulong64 hash2;
+	if (ph_dct_imagehash(file2.c_str(), hash2) < 0)
+		return -1.0;
+		
+	int d = ph_hamming_distance(hash1, hash2);
+	return (double)d;
+}
+
+double compare_radial_imagehash(const fs::path &file1, const fs::path &file2){
+	const double sigma = 1.0, gamma = 1.0;
+	const int n_angles = 180;
+	Digest digest1, digest2;
+
+	if (ph_image_digest(file1.c_str(), sigma, gamma, digest1, n_angles) < 0)
+		return -1;
+
+	if (ph_image_digest(file2.c_str(), sigma, gamma, digest2, n_angles) < 0)
+		return -1;
+
+	double pcc;
+	if (ph_peakcrosscorr(digest1, digest2, pcc) < 0)
+		return -1;
+
+	return 1.0 - pcc;
+}
+
+double compare_mh_imagehash(const fs::path &file1, const fs::path &file2){
+	const float alpha = 2.0, lvl = 1.0;
+	int n1, n2;
+	uint8_t *mh1 = ph_mh_imagehash(file1.c_str(), n1, alpha, lvl);
+	if (mh1 == NULL)
+		return -1;
+	
+	uint8_t *mh2 = ph_mh_imagehash(file2.c_str(), n2, alpha, lvl);
+	if (mh2 == NULL)
+		return -1;
+	
+	int d = ph_hammingdistance2(mh1, n1, mh2, n2);
+	return (double)d;
+}
+
+double compare_bmb_imagehash(const fs::path &file1, const fs::path &file2){
+	BMBHash bh1, bh2;
+
+	if (ph_bmb_imagehash(file1.c_str(), bh1) < 0)
+		return -1;
+	
+	if (ph_bmb_imagehash(file2.c_str(), bh2) < 0)
+		return -1;
+
+	int d = ph_bmb_distance(bh1, bh2);
+
+	ph_bmb_free(bh1);
+	ph_bmb_free(bh2);
+	
+	return (double)d;
+}
+
+double compare_images(const fs::path &file1, const fs::path &file2, const ImgHash method){
+	double d;
+	
+	switch (method){
+	case DCTHASH:
+		d = compare_dct_imagehash(file1, file2);
+		break;
+	case RADIALHASH:
+		d = compare_radial_imagehash(file1, file2);
+		break;
+	case MHASH:
+		d = compare_mh_imagehash(file1, file2);
+		break;
+	case BMBHASH:
+		d = compare_bmb_imagehash(file1, file2);
+		break;
+	default:
+		d = -1;
+	}
+	return d;
+}
+
+int calc_inter_distances(const vector<fs::path> &files1, const vector<fs::path> &files2,
+					vector<double> &distances, const ImgHash method){
+	if (files1.size() != files2.size() || files1.size() <= 0)
+		return -1;
+	distances.clear();
+	for (int i=0;i < files1.size();i++){
+		double d = compare_images(files1[i], files2[i], method);
+		if (d < 0)
+			continue;
+		distances.push_back(d);
+	}
+	
+	return 0;
+}
+
+int calc_intra_distances(const vector<fs::path> &files, vector<double> &distances, const ImgHash method){
+
+	distances.clear();
+	int ilimit = (files.size() >= 10) ? 10 : files.size();
+	for (int i=0;i < ilimit-1;i++){
+		int jlimit = (files.size() >= i+10) ? i+10 : files.size();
+		for (int j=i+1;j < jlimit;j++){
+			double d = compare_images(files[i], files[j], method);
+			if (d < 0)
+				continue;
+			distances.push_back(d);
+		}
+	}
+
+	return 0;
+}
+
+int find_stats(const vector<double> &values, double &minval, double &maxval, double &mean, double &var){
+	int n_values = 0;
+	double sum = 0;
+	double sumsq = 0;
+	double min_v = numeric_limits<double>::max();
+	double max_v = numeric_limits<double>::min();
+	for (double val : values){
+		sum = sum + val;
+		sumsq = sumsq + val*val;
+		n_values++;
+
+		if (val > max_v)
+			max_v = val;
+		if (val < min_v)
+			min_v = val;
+	}
+
+	mean /= n_values;
+	var = sumsq - ((sum*sum)/n_values)/(n_values-1);
+	minval = min_v;
+	maxval = max_v;
+	return 0;
+}
+
+int compute_histogram(const vector<double> &values, const double max_value, const int nbins, vector<double> &histogram){
+	histogram.clear();
+	histogram.resize(nbins, 0);
+
+	/* count values by bin */
+	double bin_width = max_value/(double)nbins;
+	for (double val : values){
+		int bin = (int)floor(val/bin_width);
+		histogram[bin] += 1;
+	}
+	
+	/* normalize histogram to number of values */
+	for (int i=0;i < nbins;i++){
+		histogram[i] /= (double)values.size();
+	}
+	
+	return 0;
+}
+

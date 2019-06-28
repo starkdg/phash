@@ -6,6 +6,10 @@ project(pHash)
 
 set(CMAKE_PROJECT_VERSION 0.9.7)
 
+set(CMAKE_VERBOSE_MAKEFILE OFF)
+set(CMAKE_RULE_MESSAGES OFF)
+
+
 set(CMAKE_BUILD_TYPE Debug CACHE STRING "build type" FORCE)
 set(USE_IMAGE_HASH ON CACHE BOOLEAN "compile image hashes" FORCE)
 set(USE_AUDIO_HASH OFF CACHE BOOLEAN "compile audio hashes" FORCE)
@@ -22,6 +26,14 @@ if (USE_AUIO_HASH)
 endif()
 
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src)
+
+set(Boost_USE_STATIC_LIBS ON)
+find_package(Boost 1.70.0 COMPONENTS filesystem system program_options)
+if (Boost_FOUND)
+  if (NOT Boost_LIBRARIES)
+	set(Boost_LIBRARIES Boost::filesystem Boost::system Boost::program_options)
+  endif()
+endif()
 
 if (USE_IMAGE_HASH)
   find_library(libpng png)
@@ -89,11 +101,16 @@ if (USE_VIDEO_HASH)
   list(APPEND LIB_DEPS ${libavformat} ${libavcodec} ${libswscale})
 endif()
 
-
 add_library(pHash SHARED ${LIB_SRCS})
 set_property(TARGET pHash PROPERTY VERSION ${CMAKE_PROJECT_VERSION})
 target_link_libraries(pHash	${LIBS_DEPS})
 
+# example programs
+if (USE_IMAGE_HASH)
+add_executable(imghash examples/imghash.cpp)
+target_include_directories(imghash PUBLIC src ${Boost_INCLUDE_DIRECTORIES})
+target_link_libraries(imghash pHash ${LIB_DEPS} ${Boost_LIBRARIES})
+endif()
 
 install(TARGETS pHash DESTINATION lib)
 if (USE_IMAGE_HASH OR USE_VIDEO_HASH OR USE_TEXT_HASH)
@@ -102,6 +119,11 @@ endif()
 if (USE_AUDIO_HASH)
   install(FILES src/audiophash.h DESTINATION include)
 endif()
+if (USE_IMAGE_HASH)
+  install(TARGETS imghash  DESTINATION bin)
+endif()
+
+
 
 # tests
 enable_testing()
