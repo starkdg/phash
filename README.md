@@ -42,6 +42,27 @@ There are four image hash algorithms in the pHash librarie.
    of those mean values. A basic hamming distance is used to compute
    distances.
 
+There is an example program in `examples/imghash.cpp` to evaluate the
+image hashes. Basically, it takes two directories of image files.  One
+directory must be an exact replica of the other except for a specific
+distortion applied to the images in one of the directories.  The
+original/distorted pairs must have the same filename.
+
+The program calculates the image hashes for each pair of images and
+computes the difference.  A histogram of these distances is then plotted.
+
+As a point of reference, a histogram of distances between the image
+hashes of random images is also plotted.  The peaks of the two histograms
+should exhibit good separation.
+
+Here is a python script for processing a test set of image files:
+[test set of image files](https://github.com/starkdg/pyConvnetPhash/blob/master/preprocess_image_files.py)
+
+
+Run `./imghash --help` to show a list of options to provide.
+
+
+
 ## Audio Hash
 
 An audio hash is included here for completeness.  There is a fuller java
