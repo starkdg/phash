@@ -14,6 +14,12 @@ make
 sudo make install
 ```
 
+To run tests:
+
+```
+ctest
+```
+
 The build can exclude various hashing algorithms by passing
 the variables USE_IMAGE_HASH, USE_AUDIO_HASH, USE_VIDEO_HASH
 OR USE_TEXT_HASH to cmake program: `cmake -DUSE_IMAGE_HASH=1`
