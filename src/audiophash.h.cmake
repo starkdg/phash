@@ -27,16 +27,16 @@
 
 #cmakedefine USE_AUDIO_HASH
 
+#ifdef libmpg123
+#cmakedefine USE_LIBMPG123
+#endif /* libmpg123 */
+
 #include <limits.h>
 #include <math.h>
 #include <unistd.h>
 #include <stdlib.h>
 #include <algorithm>
 #include "pHash.h"
-
-extern "C" {
-#include "ph_fft.h"
-}
 
 #ifdef USE_AUDIO_HASH
 
