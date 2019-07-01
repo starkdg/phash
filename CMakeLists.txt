@@ -4,7 +4,7 @@ include(ExternalProject)
 
 project(pHash)
 
-set(CMAKE_PROJECT_VERSION 0.9.7)
+set(CMAKE_PROJECT_VERSION 1.0.0)
 
 set(CMAKE_VERBOSE_MAKEFILE OFF)
 set(CMAKE_RULE_MESSAGES OFF)
