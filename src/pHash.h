@@ -43,16 +43,16 @@
 
 #include <stdint.h>
 
-#cmakedefine USE_IMAGE_HASH
-#cmakedefine USE_VIDEO_HASH
-#cmakedefine USE_TEXT_HASH
+/* #undef USE_IMAGE_HASH */
+#define USE_VIDEO_HASH
+/* #undef USE_TEXT_HASH */
 
-#define PACKAGE_STRING "${CMAKE_PROJECT_NAME}"
+#define PACKAGE_STRING "pHash"
 
 #if defined(USE_IMAGE_HASH) || defined(USE_VIDEO_HASH)
-#define cimg_use_png ${USE_PNG}
-#cmakedefine cimg_use_jpeg ${USE_JPEG}
-#cmakedefine cimg_use_tiff ${USE_TIFF}
+#define cimg_use_png 
+/* #undef cimg_use_jpeg */
+/* #undef cimg_use_tiff */
 #define cimg_debug 0
 #define cimg_display 0
 #include "CImg.h"

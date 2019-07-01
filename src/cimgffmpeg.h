@@ -32,15 +32,18 @@
 
 #include "CImg.h"
 
-#define __STDC_CONSTANT_MACROS
+#define USE_VIDEO_HASH
 
 extern "C" {
-	#include "libavformat/avformat.h"
-	#include "libavcodec/avcodec.h"
-	#include "libswscale/swscale.h"
+	#include <libavformat/avformat.h>
+	#include <libavcodec/avcodec.h>
+	#include <libswscale/swscale.h>
+	#include <libavutil/frame.h>
 }
 
 using namespace cimg_library;
+
+#ifdef USE_VIDEO_HASH
 
 typedef struct vf_info {
     int step;
@@ -70,5 +73,7 @@ int GetNumberStreams(const char *file);
 long GetNumberVideoFrames(const char *file);
 
 float fps(const char *filename);
+
+#endif /* USE_VIDEO_HASH */
 
 #endif /*CIMGFFMPEG_H_*/
