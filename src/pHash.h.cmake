@@ -125,23 +125,6 @@ typedef struct ph_digest {
     int n_coeffs;                   //the size of the coeff array
 } Digest;
 
-/* variables for textual hash */
-const int KgramLength = 50;
-const int WindowLength = 100;
-const int delta = 1;
-
-#define ROTATELEFT(x, bits)  (((x)<<(bits)) | ((x)>>(64-bits)))
-
-typedef struct ph_hash_point {
-    ulong64 hash;
-    off_t index; /*pos of hash in orig file */
-} TxtHashPoint;
-
-typedef struct ph_match{
-    off_t first_index; /* offset into first file */
-    off_t second_index; /* offset into second file */
-    uint32_t length;    /*length of match between 2 files */
-} TxtMatch;
 
 /*! /brief copyright information
  */
@@ -250,6 +233,25 @@ double ph_dct_videohash_dist(ulong64 *hashA, int N1, ulong64 *hashB, int N2, int
 
  
 #ifdef USE_TEXT_HASH
+
+/* variables for textual hash */
+const int KgramLength = 50;
+const int WindowLength = 100;
+const int delta = 1;
+
+#define ROTATELEFT(x, bits)  (((x)<<(bits)) | ((x)>>(64-bits)))
+
+typedef struct ph_hash_point {
+    ulong64 hash;
+    off_t index; /*pos of hash in orig file */
+} TxtHashPoint;
+
+typedef struct ph_match{
+    off_t first_index; /* offset into first file */
+    off_t second_index; /* offset into second file */
+    uint32_t length;    /*length of match between 2 files */
+} TxtMatch;
+
 
 /** /brief textual hash for file
  *  /param filename - char* name of file
