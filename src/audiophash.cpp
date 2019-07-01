@@ -32,6 +32,8 @@
 #include <mpg123.h>
 #endif
 
+using namespace std;
+
 #ifdef USE_AUDIO_HASH
 
 int ph_count_samples(const char *filename, int sr,int channels){

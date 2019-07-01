@@ -25,10 +25,10 @@
 #ifndef _AUDIO_PHASH_H
 #define _AUDIO_PHASH_H
 
-#cmakedefine USE_AUDIO_HASH
+#define USE_AUDIO_HASH
 
 #ifdef libmpg123
-#cmakedefine USE_LIBMPG123
+/* #undef USE_LIBMPG123 */
 #endif /* libmpg123 */
 
 #include <limits.h>

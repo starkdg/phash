@@ -21,12 +21,12 @@ int main(int argc, char **argv){
 	int n1;
 	float *buf1 = ph_readaudio(image_file1, sr, n_channels, NULL, n1, 0);
 	assert(buf1 != NULL);
-	assert(n1 >= n_expected1);
+	assert(n1 == n_expected1);
 	
 	int n2;
 	float *buf2 = ph_readaudio(image_file2, sr, n_channels, NULL, n2, 0);
 	assert(buf2 != NULL);
-	assert(n2 >= n_expected2);
+	assert(n2 == n_expected2);
 	
 	cout << "file: " << image_file1 << " samples " << n1 << endl;
 	cout << "file: " << image_file2 << " samples " << n2 << endl;

@@ -630,7 +630,6 @@ double ph_dct_videohash_dist(ulong64 *hashA, int N1, ulong64 *hashB, int N2, int
 
 #endif /* USE_VIDEO_HASH */
 
-
 #ifdef USE_TEXT_HASH
 
 TxtHashPoint* ph_texthash(const char *filename,int *nbpoints){

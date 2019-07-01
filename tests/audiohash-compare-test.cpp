@@ -10,8 +10,8 @@ int main(int argc, char **argv){
 	assert(argc == 8);
 	const char* image_file1 = argv[1];
 	const char* image_file2 = argv[2];
-	const int n_expected1 = atoi(argv[3]);
-	const int n_expected2 = atoi(argv[4]);
+	const int expected_nframes1 = atoi(argv[3]);
+	const int expected_nframes2 = atoi(argv[4]);
 	const float expected_max_cs = atof(argv[5]);
 	const int expected_pos = atoi(argv[6]);
 	const int expected_Nc = atoi(argv[7]);
@@ -31,17 +31,17 @@ int main(int argc, char **argv){
 	int n2;
 	float *buf2 = ph_readaudio(image_file2, sr, n_channels, NULL, n2, 0);
 	assert(buf2 != NULL);
-	assert(n2 >= 0);
+    assert(n2 >= 0);
 	
 	int n_frames1;
 	uint32_t *hash1 = ph_audiohash(buf1, n1, sr, n_frames1);
 	assert(hash1 != NULL);
-	assert(n_frames1 == n_expected1);
+	assert(n_frames1 == expected_nframes1);
 	
 	int n_frames2;
 	uint32_t *hash2 = ph_audiohash(buf2, n2, sr, n_frames2);
 	assert(hash2 != NULL);
-	assert(n_frames2 == n_expected2);
+	assert(n_frames2 == expected_nframes2);
 
 	int Nc;
 	double *cs = ph_audio_distance_ber(hash1, n_frames1, hash2, n_frames2, threshold, bs, Nc);
