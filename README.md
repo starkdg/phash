@@ -26,6 +26,9 @@ The build can exclude various hashing algorithms by passing
 the variables USE_IMAGE_HASH, USE_AUDIO_HASH, USE_VIDEO_HASH
 OR USE_TEXT_HASH to cmake program: `cmake -DUSE_IMAGE_HASH=1`
 
+The Windows build currently does not work.  If anyone manages to
+get it to work, please send a pull request with the changes.
+
 
 ## Image Hashing
 
