@@ -36,7 +36,6 @@
 #include <sys/mman.h>
 #include <fcntl.h>
 #include <string.h>
-#include <stdio.h>
 #include <stdlib.h>
 
 #define __STDC_CONSTANT_MACROS
@@ -157,18 +156,23 @@ void ph_free_feature(Features &fv);
 void ph_free_digest(Digest &digest);
 
 /*! /brief aux. function used to compute an image digest
-*  /param src source image
+*  /param file path to image file
 *  /param n_angles no. angles through center to base the hash on
+*  /param sigma preprocessing gaussian smoothing coefficient
+*  /param gamma preprocessing gamma correction coefficient
 *  /param fv (out) feature vector
 *  /return 0 on success, -1 on failure
 */
-int ph_feature_vector(const CImg<float> &src, const int n_angles, Features &fv);
+
+int ph_feature_vector(const char *file, const int n_angles, const double sigma, const double gamma, Features &fv);
+
 
 /*! /brief aux. function used by image_digest for computing dct of a feature vector
  *  /param fv, feature vector
  *  /param digest (out)
  *  /return 0 on success, -1 on failure
  */
+
 int ph_dct(const Features &fv,Digest &digest);
 
 /*! /brief compute image digest based on radial image hash

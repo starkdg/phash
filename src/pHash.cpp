@@ -69,10 +69,35 @@ void ph_free_digest(Digest &digest){
 	delete[] digest.coeffs;
 }
 
-int ph_feature_vector(const CImg<float> &src, const int n_angles, Features &fv){
+
+int ph_feature_vector(const char *file, const int n_angles, const double sigma, const double gamma, Features &fv){
+	const int preset_width = 256;
+	const int preset_height = 256;
+	const int strip_width = 5;
+	
+	CImg<float> src;
+	try {
+		src.load(file);
+	} catch (CImgException &ex){
+		return -1;
+	}
+
+	if (src.spectrum() >= 3){
+		src.RGBtoYCbCr().channel(0);
+    } else if (src.spectrum() == 1){
+		src.channel(0);
+    }
+    else {
+		return -1;
+    }
+
+	src.normalize(0,1);
+    src.blur((float)sigma, false, true);
+	src.pow(gamma);
+	src.resize(preset_width, preset_height, 1, 1, 5);
+
 	float x_center = round((float)src.width()/2.0);
 	float y_center = round((float)src.width()/2.0);
-	const int strip_width = 5;
 	
     fv.features = new double[n_angles]; 
     fv.n_features = n_angles;
@@ -106,10 +131,9 @@ int ph_feature_vector(const CImg<float> &src, const int n_angles, Features &fv){
 		}
 		fv.features[i] = (sumsq - (sum*sum)/n_pixels)/n_pixels;
 	}
-
-    return 0;
+	
+	return 0;
 }
-
 
 int ph_dct(const Features &fv,Digest &digest){
 	const int n_coeffs = 40;
@@ -152,37 +176,11 @@ int ph_dct(const Features &fv,Digest &digest){
 
 int ph_image_digest(const char *file,const double sigma, const double gamma,Digest &digest, const int n_angles){
 
-	const int preset_width = 256;
-	const int preset_height = 256;
-	
-	CImg<float> src;
-	try {
-		src.load(file);
-	} catch (CImgException &ex){
-		return -1;
-	}
-	
-    if (src.spectrum() >= 3){
-		src.RGBtoYCbCr().channel(0);
-    } else if (src.spectrum() == 1){
-		src.channel(0);
-    }
-    else {
-		return -1;
-    }
-
-	src.normalize(0,1);
-    src.blur((float)sigma, false, true);
-	src.pow(gamma);
-	src.resize(preset_width, preset_height, 1, 1, 5);
-	
 	Features features;
-    int rc = ph_feature_vector(src, n_angles, features);
-	if (rc < 0){
+    if (ph_feature_vector(file, n_angles, sigma, gamma, features) < 0)
 		return -1;
-	}
 
-    rc = ph_dct(features,digest);
+    int rc = ph_dct(features,digest);
 	if (rc < 0){
 		ph_free_feature(features);
 		return -1;
@@ -251,9 +249,9 @@ int ph_dct_imagehash(const char* file,ulong64 &hash){
     if (src.spectrum() == 3){
         img = src.RGBtoYCbCr().channel(0).get_convolve(meanfilter);
     } else if (src.spectrum() == 4){
-	int width = src.width();
+		int width = src.width();
         int height = src.height();
-	img = src.crop(0,0,0,0,width-1,height-1,0,2).RGBtoYCbCr().channel(0).get_convolve(meanfilter);
+		img = src.crop(0,0,0,0,width-1,height-1,0,2).RGBtoYCbCr().channel(0).get_convolve(meanfilter);
     } else {
 		img = src.channel(0).get_convolve(meanfilter);
     }
@@ -269,9 +267,9 @@ int ph_dct_imagehash(const char* file,ulong64 &hash){
     float median = subsec.median();
     hash = 0;
     for (int i=0;i < 64;i++, hash <<= 1){
-	float current = subsec(i);
+		float current = subsec(i);
         if (current > median)
-	    hash |= 0x01;
+			hash |= 0x01;
     }
   
     delete C;
