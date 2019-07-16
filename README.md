@@ -60,11 +60,13 @@ distortion applied to the images in one of the directories.  The
 original/distorted pairs must have the same filename.
 
 The program calculates the image hashes for each pair of images and
-computes the difference.  A histogram of these distances is then plotted.
+computes the distance.  A histogram of these distances is then plotted.
 
 As a point of reference, a histogram of distances between the image
-hashes of random images is also plotted.  The peaks of the two histograms
-should exhibit good separation.
+hashes of random dissimilar images is also plotted.  The peaks of the two histograms
+should exhibit good separation. The program, imghash prints out the two histograms
+to an output file.  This file can then be used by a tool such as gnuplot to plot
+the histograms.
 
 Here is a python script for processing a test set of image files:
 [test set of image files](https://github.com/starkdg/pyConvnetPhash/blob/master/preprocess_image_files.py)
@@ -73,6 +75,22 @@ Here is a python script for processing a test set of image files:
 Run `./imghash --help` to show a list of options to provide.
 
 
+### Results
+
+Test results for the image hashes can be summed up in the following table. To conduct the test,
+an assortment of about one hundred natural images was amassed.  The distorted replicas were then
+created by the above script.  The entries in the table represent the percentage of similar distances
+that fall above the threshold values.  The threshold values are set to be the average dissimilar distance
+minus one and two standard deviations.  Values close to zero indicate the hashes ability to distinguish
+between similar and wholely different images for that particular distortion.  
+
+![image hash test result](https://github.com/starkdg/phash/raw/master/resources/imghash-test-results.png "image phash tests")
+
+As you can see, the distortions proving the toughest are rotation, shear, crop, horizontal and vertical flip.  The dct image
+hash offers fairly good results - especially given that it is only 64 bits of information.  The 32-byte length BMB hash offers
+some modest improvements.  
+
+The radial hash disappoints with a further degradation in the bright, dark and histogram equalization distortions.
 
 ## Audio Hash
 
