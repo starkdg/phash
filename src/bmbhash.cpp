@@ -47,17 +47,11 @@ int ph_bmb_imagehash(const char *file, BMBHash &ret_hash) {
 		return -1;
 	}
 	
-	double g_mean = img.mean();
-	double g_median = img.median();
-	double g_min = img.min();
-	double g_max = img.max();
-	double g_var = img.variance(0);
-
 	img.blur(sigma, false, true);  /* gaussian blur with dirichlet boundary condition */
 	img.resize(preset_width, preset_height, 1, 1, 1); /* linear interpolation */
 
-	double *mean_vals = new double[n_blocks];
-
+	CImg<double> localmeans(n_blocks, 1, 1, 1, 0);
+	
 	int blockidx = 0;
 	for (int blockrow = 0; blockrow < preset_height - blk_height; blockrow += blk_height) {
 		for (int blockcol = 0; blockcol < preset_width - blk_width; blockcol += blk_width) {
@@ -68,22 +62,20 @@ int ph_bmb_imagehash(const char *file, BMBHash &ret_hash) {
 					acc = acc + pxl;
 				}
 			}
-			mean_vals[blockidx] = acc / (blk_height*blk_height);
+			localmeans(blockidx) = acc / (blk_height*blk_height);
 			blockidx++;
 		}
 	}
 
-	/* calculate the median */
-	double median_value = CImg<double>(mean_vals, n_blocks).median();
+	double median_value = localmeans.median();
 	
 	_ph_bmb_new(ret_hash, n_blocks);
 
 	for (int i = 0; i < n_blocks; i++) {
-		if (mean_vals[i] > median_value) {
+		if (localmeans(i) > median_value) {
 			_bmb_setbit(ret_hash, i);
 		} 
 	}
-	delete[] mean_vals;
    	return 0;
 }
 

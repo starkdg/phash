@@ -37,6 +37,12 @@
 
 using namespace std;
 
+int m_angles;
+double m_sigma;
+double m_gamma;
+double m_alpha;
+double m_level;
+
 namespace fs=boost::filesystem;
 namespace po=boost::program_options;
 
@@ -61,6 +67,8 @@ int calc_intra_distances(const vector<fs::path> &files, vector<double> &distance
 
 int find_stats(const vector<double> &values, double &minval, double &maxval, double &mean, double &var);
 
+double find_pct_distances_above_threshold(const vector<double> &values, double threshold);
+
 int compute_histogram(const vector<double> &values, const double max_value, const int nbins, vector<double> &histogram);
 
 
@@ -75,11 +83,13 @@ typedef struct Args {
 
 Args parse_options(int argc, char **argv){
 	Args args;
-	po::options_description descr("Available Options");
+	po::options_description descr("General Options");
 	descr.add_options()
 		("help,h", "usage information")
-		("dir1", po::value<string>(&args.dir1)->required(), "path to directory 1")
-		("dir2", po::value<string>(&args.dir2)->required(), "path to directory 2")
+		("dir1", po::value<string>(&args.dir1)->required(),
+		                         "path to directory 1")
+		("dir2", po::value<string>(&args.dir2)->required(),
+		                         "path to directory 2")
 		("output, o", po::value<string>(&args.outfile)->default_value("histogram.dat"),
 		                   "filename to write histogram values")
 		("method,m", po::value<int>(&args.method)->default_value(1),
@@ -90,7 +100,17 @@ Args parse_options(int argc, char **argv){
                                   "\t 3 - mh image hash\n"
 		                          "\t 4 - bmb image hash\n\n")
 		("nbins,b", po::value<int>(&args.nbins)->default_value(64),
-		                          "number of histogram bins");
+		                          "number of histogram bins")
+		("angles,n", po::value<int>(&m_angles)->default_value(90),
+		                   "number angles through center (Radial Hash Option)")
+		("sigma,s", po::value<double>(&m_sigma)->default_value(1.0),
+		                   "pre-procesing gaussian blurr coefficient (Radial Hash Option)")
+		("gamma,g", po::value<double>(&m_gamma)->default_value(1.0),
+		                   "pre-processing gamma correction coefficient (Radial Hash Option)")
+		("alpha,a", po::value<double>(&m_alpha)->default_value(2.0),
+		                   "wavelet alpha coefficient (MH Hash Option)")
+		("level,l", po::value<double>(&m_level)->default_value(1.0),
+		                   "wavelet level coefficient (MH Hash Option)");
 
 	po::variables_map vm;
 	
@@ -126,7 +146,8 @@ int main(int argc, char **argv){
 	cout << "compare files in two directories" << endl;
 	cout << "dir: " << dirname1 << endl;
 	cout << "dir: " << dirname2 << endl;
-	
+	cout << "using method " << method << endl;
+
 	vector<fs::path> files1;
 	int n1 = read_filenames_from_dir(dirname1, files1);
 	assert(n1 >= 0);
@@ -143,25 +164,51 @@ int main(int argc, char **argv){
 
 	vector<double> interdistances;
 	int rc = calc_inter_distances(files1, files2, interdistances, method);
-	assert(rc == 0);
+	cout << "    comparisons made: " << rc << endl;
+	assert(rc > 0);
+
+	/* find max and min of inter distances */
+	double min_inter_d, max_inter_d, mean_inter_d, sd_inter_d;
+	find_stats(interdistances, min_inter_d, max_inter_d, mean_inter_d, sd_inter_d);
+	cout << "  min " << min_inter_d << endl;
+	cout << "  max " << max_inter_d << endl;
+	cout << "  mean " << mean_inter_d << endl;
+	cout << "  s.d. " << sd_inter_d << endl << endl;
 
 	cout << "Calculate distances between dissimilar files ..." << endl;
 
 	vector<double> intradistances;
 	rc = calc_intra_distances(files1, intradistances, method);
-	assert(rc == 0);
+	cout << "   comparisons made: " << rc << endl;
+	assert(rc > 0);
 
-	/* find maximum of distance range */
-	double min_d, max_d, mean_d, var_d;
-	find_stats(intradistances, min_d, max_d, mean_d, var_d);
+	/* find  max and min of intra distances */
+	double min_intra_d, max_intra_d, mean_intra_d, sd_intra_d;
+	find_stats(intradistances, min_intra_d, max_intra_d, mean_intra_d, sd_intra_d);
+	cout << "  min " << min_intra_d << endl;
+	cout << "  max " << max_intra_d << endl;
+	cout << "  mean " << mean_intra_d << endl;
+	cout << "  s.d. " << sd_intra_d << endl << endl;
 
+	double threshold1 = mean_intra_d - 2*sd_intra_d;
+	double threshold2 = mean_intra_d - sd_intra_d;
 
+	cout << "Thresholds:" << endl;
+	cout << "T1 = " << threshold1 << endl;
+	cout << "T2 = " << threshold2 << endl << endl;
+
+	double p1 = find_pct_distances_above_threshold(interdistances, threshold1);
+	double p2 = find_pct_distances_above_threshold(interdistances, threshold2);
+
+	cout << "pct above T1: " << p1 << endl;
+	cout << "pct above T2: " << p2 << endl << endl;
+	
 	/* calculate histograms */
 	vector<double> inter_histogram;
-	compute_histogram(interdistances, max_d, nbins, inter_histogram);
+	compute_histogram(interdistances, max_intra_d, nbins, inter_histogram);
 
 	vector<double> intra_histogram;
-	compute_histogram(intradistances, max_d, nbins, intra_histogram);
+	compute_histogram(intradistances, max_intra_d, nbins, intra_histogram);
 
 
 	/* write out histograms to output file */
@@ -222,35 +269,39 @@ double compare_dct_imagehash(const fs::path &file1, const fs::path &file2){
 }
 
 double compare_radial_imagehash(const fs::path &file1, const fs::path &file2){
-	const double sigma = 1.0, gamma = 1.0;
-	const int n_angles = 180;
-	Digest digest1, digest2;
-
-	if (ph_image_digest(file1.c_str(), sigma, gamma, digest1, n_angles) < 0)
+	Digest digest1;
+	if (ph_image_digest(file1.c_str(), m_sigma, m_gamma, digest1, m_angles) < 0)
 		return -1;
 
-	if (ph_image_digest(file2.c_str(), sigma, gamma, digest2, n_angles) < 0)
+	Digest digest2;
+	if (ph_image_digest(file2.c_str(), m_sigma, m_gamma, digest2, m_angles) < 0)
 		return -1;
 
 	double pcc;
 	if (ph_peakcrosscorr(digest1, digest2, pcc) < 0)
 		return -1;
 
-	return 1.0 - pcc;
+	ph_free_digest(digest1);
+	ph_free_digest(digest2);
+	
+	return 1000.0*(1.0 - pcc);
 }
 
 double compare_mh_imagehash(const fs::path &file1, const fs::path &file2){
-	const float alpha = 2.0, lvl = 1.0;
 	int n1, n2;
-	uint8_t *mh1 = ph_mh_imagehash(file1.c_str(), n1, alpha, lvl);
+	uint8_t *mh1 = ph_mh_imagehash(file1.c_str(), n1, m_alpha, m_level);
 	if (mh1 == NULL)
 		return -1;
 	
-	uint8_t *mh2 = ph_mh_imagehash(file2.c_str(), n2, alpha, lvl);
+	uint8_t *mh2 = ph_mh_imagehash(file2.c_str(), n2, m_alpha, m_level);
 	if (mh2 == NULL)
 		return -1;
 	
 	int d = ph_hammingdistance2(mh1, n1, mh2, n2);
+
+	free(mh1);
+	free(mh2);
+	
 	return (double)d;
 }
 
@@ -297,35 +348,40 @@ int calc_inter_distances(const vector<fs::path> &files1, const vector<fs::path> 
 					vector<double> &distances, const ImgHash method){
 	if (files1.size() != files2.size() || files1.size() <= 0)
 		return -1;
+
+	int count = 0;
 	distances.clear();
 	for (int i=0;i < files1.size();i++){
 		double d = compare_images(files1[i], files2[i], method);
 		if (d < 0)
 			continue;
 		distances.push_back(d);
+		count++;
 	}
 	
-	return 0;
+	return count;
 }
 
 int calc_intra_distances(const vector<fs::path> &files, vector<double> &distances, const ImgHash method){
-
+	int count = 0;
+	
 	distances.clear();
-	int ilimit = (files.size() >= 10) ? 10 : files.size();
+	int ilimit = (files.size() < 10) ? files.size() : 10;;
 	for (int i=0;i < ilimit-1;i++){
-		int jlimit = (files.size() >= i+10) ? i+10 : files.size();
+		int jlimit = (files.size() > i+15) ? i+15 : files.size();
 		for (int j=i+1;j < jlimit;j++){
 			double d = compare_images(files[i], files[j], method);
 			if (d < 0)
 				continue;
 			distances.push_back(d);
+			count++;
 		}
 	}
 
-	return 0;
+	return count;
 }
 
-int find_stats(const vector<double> &values, double &minval, double &maxval, double &mean, double &var){
+int find_stats(const vector<double> &values, double &minval, double &maxval, double &mean, double &stddev){
 	int n_values = 0;
 	double sum = 0;
 	double sumsq = 0;
@@ -342,12 +398,24 @@ int find_stats(const vector<double> &values, double &minval, double &maxval, dou
 			min_v = val;
 	}
 
-	mean /= n_values;
-	var = sumsq - ((sum*sum)/n_values)/(n_values-1);
+	mean = sum/n_values;
+	double var = (sumsq - ((sum*sum)/n_values))/(n_values-1);
+	stddev = sqrt(var);
 	minval = min_v;
 	maxval = max_v;
 	return 0;
 }
+
+double find_pct_distances_above_threshold(const vector<double> &values, double threshold){
+	int count = 0;
+	for (double val: values){
+		if (val > threshold){
+			count += 1;
+		}
+	}
+	return (double)count/(double)values.size();
+}
+
 
 int compute_histogram(const vector<double> &values, const double max_value, const int nbins, vector<double> &histogram){
 	histogram.clear();
