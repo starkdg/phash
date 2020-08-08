@@ -283,13 +283,13 @@ CImg<float>* GetMHKernel(float alpha, float level){
     static CImg<float> *pkernel = NULL;
     float xpos, ypos, A;
     if (!pkernel){
-	pkernel = new CImg<float>(2*sigma+1,2*sigma+1,1,1,0);
+		pkernel = new CImg<float>(2*sigma+1,2*sigma+1,1,1,0);
         cimg_forXY(*pkernel,X,Y){
 	    xpos = pow(alpha,-level)*(X-sigma);
-            ypos = pow(alpha,-level)*(Y-sigma);
-            A = xpos*xpos + ypos*ypos;
-            pkernel->atXY(X,Y) = (2-A)*exp(-A/2);
-	}
+		ypos = pow(alpha,-level)*(Y-sigma);
+		A = xpos*xpos + ypos*ypos;
+		pkernel->atXY(X,Y) = (2-A)*exp(-A/2);
+		}
     }
     return pkernel;
 }

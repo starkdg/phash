@@ -28,7 +28,7 @@ if (USE_VIDEO_HASH)
 endif()
 
 set(Boost_USE_STATIC_LIBS ON)
-find_package(Boost 1.70.0 COMPONENTS filesystem system program_options)
+find_package(Boost 1.67.0 COMPONENTS filesystem system program_options)
 if (Boost_FOUND)
   if (NOT Boost_LIBRARIES)
 	set(Boost_LIBRARIES Boost::filesystem Boost::system Boost::program_options)
@@ -145,6 +145,9 @@ if (USE_AUDIO_HASH)
 endif()
 if (USE_IMAGE_HASH)
   install(TARGETS imghash  DESTINATION bin)
+endif()
+if (USE_VIDEO_HASH)
+  install(FILES src/CImg.h DESTINATION include)
 endif()
 
 
