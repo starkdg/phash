@@ -50,8 +50,8 @@
 
 #if defined(USE_IMAGE_HASH) || defined(USE_VIDEO_HASH)
 #define cimg_use_png ${USE_PNG}
-#cmakedefine cimg_use_jpeg ${USE_JPEG}
-#cmakedefine cimg_use_tiff ${USE_TIFF}
+#define cimg_use_jpeg ${USE_JPEG}
+#define cimg_use_tiff ${USE_TIFF}
 #define cimg_debug 0
 #define cimg_display 0
 #include "CImg.h"
